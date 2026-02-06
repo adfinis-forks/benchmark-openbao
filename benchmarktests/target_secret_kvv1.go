@@ -4,6 +4,7 @@
 package benchmarktests
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-uuid"
@@ -166,6 +168,18 @@ func (k *KVV1Test) Setup(client *api.Client, mountName string, topLevelConfig *T
 			"foo": 1,
 		},
 	}
+
+	fmt.Println(client.MaxRetries(), client.MinRetryWait(), client.MaxRetryWait())
+	client.SetMaxRetries(5)
+	client.SetMinRetryWait(100 * time.Millisecond)
+	client.SetMaxRetryWait(5 * time.Second)
+	client.SetCheckRetry(func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		retry, err := api.DefaultRetryPolicy(ctx, resp, err)
+		if err != nil {
+			return retry, err
+		}
+		return retry || (resp != nil && resp.StatusCode == 404), nil
+	})
 
 	setupLogger.Trace("seeding secrets")
 	for i := 1; i <= k.config.NumKVs; i++ {
